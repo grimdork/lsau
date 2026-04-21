@@ -29,16 +29,14 @@ jobs:
           VERSION: ${{ steps.meta.outputs.version }}
         run: |
           set -euo pipefail
-
-          sdkroot="$(xcrun --sdk macosx --show-sdk-path)"
           arm64_archive="lsau_${VERSION}_Darwin_arm64.tar.gz"
           x86_64_archive="lsau_${VERSION}_Darwin_x86_64.tar.gz"
 
           rm -rf dist
           mkdir -p dist/build dist/package/arm64 dist/package/x86_64 dist/archive
 
-          xcrun --sdk macosx swiftc -O -target arm64-apple-macos11.0 -sdk "$sdkroot" -framework AudioToolbox -o dist/build/lsau-arm64 main.swift
-          xcrun --sdk macosx swiftc -O -target x86_64-apple-macos11.0 -sdk "$sdkroot" -framework AudioToolbox -o dist/build/lsau-x86_64 main.swift
+          xcrun swiftc -O -framework AudioToolbox -o dist/build/lsau-arm64 main.swift
+          xcrun swiftc -O -target x86_64-apple-macos11.0 -framework AudioToolbox -o dist/build/lsau-x86_64 main.swift
           xcrun strip -S -x dist/build/lsau-arm64
           xcrun strip -S -x dist/build/lsau-x86_64
 
