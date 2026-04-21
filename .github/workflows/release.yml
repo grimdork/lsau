@@ -71,13 +71,16 @@ jobs:
           generate_release_notes: true
 
       - name: Check out Homebrew tap
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: actions/checkout@v4
         with:
           repository: grimdork/homebrew-tools
+          ref: main
           token: ${{ secrets.GORELEASER_TOKEN }}
           path: homebrew-tools
 
       - name: Update Homebrew formula
+        if: startsWith(github.ref, 'refs/tags/v')
         env:
           TAG: ${{ steps.meta.outputs.tag }}
           VERSION: ${{ steps.meta.outputs.version }}
@@ -124,6 +127,7 @@ jobs:
           EOF
 
       - name: Commit and push formula update
+        if: startsWith(github.ref, 'refs/tags/v')
         working-directory: homebrew-tools
         env:
           VERSION: ${{ steps.meta.outputs.version }}
@@ -139,4 +143,4 @@ jobs:
 
           git add lsau.rb
           git commit -m "Release lsau ${VERSION}"
-          git push
+          git push origin HEAD:main

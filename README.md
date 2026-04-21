@@ -2,6 +2,13 @@
 
 `lsau` is a small macOS command-line tool that lists installed Audio Units and groups them by publisher.
 
+## Install with Homebrew
+
+```sh
+brew tap grimdork/tools
+brew install grimdork/tools/lsau
+```
+
 ## Build
 
 This project uses a simple `Makefile` rather than Swift Package Manager.
