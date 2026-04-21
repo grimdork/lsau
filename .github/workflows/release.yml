@@ -137,10 +137,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          if git diff --quiet -- lsau.rb; then
+          git add lsau.rb
+
+          if git diff --cached --quiet -- lsau.rb; then
             exit 0
           fi
 
-          git add lsau.rb
           git commit -m "Release lsau ${VERSION}"
           git push origin HEAD:main
