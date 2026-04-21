@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - main
-    tags:
-      - "v*"
   pull_request:
   workflow_dispatch:
 
@@ -20,12 +18,20 @@ jobs:
       - name: Build
         run: make
 
+      - name: Build debug binary
+        run: make debug
+
       - name: Verify CLI help
         run: ./build/lsau -h
+
+      - name: Verify debug CLI help
+        run: ./build/lsau-debug -h
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
           name: lsau-macos
-          path: build/lsau
+          path: |
+            build/lsau
+            build/lsau-debug
           if-no-files-found: error

@@ -1,0 +1,142 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Prepare release metadata
+        id: meta
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Build release archives
+        id: assets
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          sdkroot="$(xcrun --sdk macosx --show-sdk-path)"
+          arm64_archive="lsau_${VERSION}_Darwin_arm64.tar.gz"
+          x86_64_archive="lsau_${VERSION}_Darwin_x86_64.tar.gz"
+
+          rm -rf dist
+          mkdir -p dist/build dist/package/arm64 dist/package/x86_64 dist/archive
+
+          xcrun --sdk macosx swiftc -O -target arm64-apple-macos11.0 -sdk "$sdkroot" -framework AudioToolbox -o dist/build/lsau-arm64 main.swift
+          xcrun --sdk macosx swiftc -O -target x86_64-apple-macos11.0 -sdk "$sdkroot" -framework AudioToolbox -o dist/build/lsau-x86_64 main.swift
+          xcrun strip -S -x dist/build/lsau-arm64
+          xcrun strip -S -x dist/build/lsau-x86_64
+
+          cp dist/build/lsau-arm64 dist/package/arm64/lsau
+          cp dist/build/lsau-x86_64 dist/package/x86_64/lsau
+
+          tar -C dist/package/arm64 -czf "dist/archive/${arm64_archive}" lsau
+          tar -C dist/package/x86_64 -czf "dist/archive/${x86_64_archive}" lsau
+
+          arm64_sha="$(shasum -a 256 "dist/archive/${arm64_archive}" | awk '{print $1}')"
+          x86_64_sha="$(shasum -a 256 "dist/archive/${x86_64_archive}" | awk '{print $1}')"
+
+          {
+            echo "${arm64_sha}  ${arm64_archive}"
+            echo "${x86_64_sha}  ${x86_64_archive}"
+          } > dist/checksums.txt
+
+          echo "arm64_archive=${arm64_archive}" >> "$GITHUB_OUTPUT"
+          echo "x86_64_archive=${x86_64_archive}" >> "$GITHUB_OUTPUT"
+          echo "arm64_sha=${arm64_sha}" >> "$GITHUB_OUTPUT"
+          echo "x86_64_sha=${x86_64_sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/archive/${{ steps.assets.outputs.arm64_archive }}
+            dist/archive/${{ steps.assets.outputs.x86_64_archive }}
+            dist/checksums.txt
+          generate_release_notes: true
+
+      - name: Check out Homebrew tap
+        uses: actions/checkout@v4
+        with:
+          repository: grimdork/homebrew-tools
+          token: ${{ secrets.GORELEASER_TOKEN }}
+          path: homebrew-tools
+
+      - name: Update Homebrew formula
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          ARM64_ARCHIVE: ${{ steps.assets.outputs.arm64_archive }}
+          X86_64_ARCHIVE: ${{ steps.assets.outputs.x86_64_archive }}
+          ARM64_SHA: ${{ steps.assets.outputs.arm64_sha }}
+          X86_64_SHA: ${{ steps.assets.outputs.x86_64_sha }}
+        run: |
+          set -euo pipefail
+
+          cat > homebrew-tools/lsau.rb <<EOF
+          # frozen_string_literal: true
+
+          class Lsau < Formula
+            desc "List installed Audio Units grouped by publisher"
+            homepage "https://github.com/${GITHUB_REPOSITORY}"
+            version "${VERSION}"
+            license "MIT"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${ARM64_ARCHIVE}"
+                sha256 "${ARM64_SHA}"
+
+                def install
+                  bin.install "lsau"
+                end
+              end
+
+              if Hardware::CPU.intel?
+                url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${X86_64_ARCHIVE}"
+                sha256 "${X86_64_SHA}"
+
+                def install
+                  bin.install "lsau"
+                end
+              end
+            end
+
+            test do
+              assert_match "Usage: lsau", shell_output("#{bin}/lsau -h")
+            end
+          end
+          EOF
+
+      - name: Commit and push formula update
+        working-directory: homebrew-tools
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet -- lsau.rb; then
+            exit 0
+          fi
+
+          git add lsau.rb
+          git commit -m "Release lsau ${VERSION}"
+          git push

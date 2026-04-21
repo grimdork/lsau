@@ -1,14 +1,25 @@
 .DEFAULT_GOAL := default
 
 SWIFTC := xcrun swiftc
-TARGET := build/lsau
+STRIP := xcrun strip
+RELEASE_TARGET := build/lsau
+DEBUG_TARGET := build/lsau-debug
 SOURCES := main.swift
 
-default: $(TARGET)
+default: release
 
-$(TARGET): $(SOURCES)
+release: $(RELEASE_TARGET)
+
+debug: $(DEBUG_TARGET)
+
+$(RELEASE_TARGET): $(SOURCES)
 	mkdir -p build
-	$(SWIFTC) -O -framework AudioToolbox -o $(TARGET) $(SOURCES)
+	$(SWIFTC) -O -framework AudioToolbox -o $(RELEASE_TARGET) $(SOURCES)
+	$(STRIP) -S -x $(RELEASE_TARGET)
+
+$(DEBUG_TARGET): $(SOURCES)
+	mkdir -p build
+	$(SWIFTC) -Onone -g -framework AudioToolbox -o $(DEBUG_TARGET) $(SOURCES)
 
 clean:
 	rm -rf build
